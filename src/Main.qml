@@ -68,7 +68,9 @@ ApplicationWindow {
     readonly property bool split: rightPane !== null
     // Whether keys are going into a text field. The right pane can go before
     // the window does when it closes, leaving activePane null.
-    readonly property bool typing: (!!activePane && activePane.typing) || (!!chooserBar.item && chooserBar.item.typing)
+    readonly property bool typing: (!!activePane && activePane.typing) || (!!chooserBar.item && chooserBar.item.typing) || bookmarksLayer.busy
+    // The bookmarks bar and its dialogs (BookmarksLayer.qml), for the panes.
+    readonly property alias bookmarksLayer: bookmarksLayerItem
     // The rightmost pane's path bar reaches over the details column.
     readonly property int detailsWidth: details.visible ? details.width : 0
     // Whether the window is wide enough for the details column at all.
@@ -166,11 +168,11 @@ ApplicationWindow {
                 onFinished: win.activePane.focusView()
                 onHelpRequested: win.helpVisible = !win.helpVisible
                 onFormatRequested: (disk) => win.activePane.formatDrive(disk)
-                Layout.topMargin: parent.parent.barHeight
+                Layout.topMargin: parent.parent.barHeight + bookmarksLayerItem.barHeight
                 Layout.preferredWidth: 190
                 Layout.fillHeight: true
             }
-            Rectangle { Layout.topMargin: parent.parent.barHeight; Layout.fillHeight: true; implicitWidth: 1; color: Qt.alpha(theme.foreground, 0.12) }
+            Rectangle { Layout.topMargin: parent.parent.barHeight + bookmarksLayerItem.barHeight; Layout.fillHeight: true; implicitWidth: 1; color: Qt.alpha(theme.foreground, 0.12) }
 
             FolderPane {
                 id: leftPane
@@ -195,13 +197,17 @@ ApplicationWindow {
             PreviewPane {
                 id: details
                 visible: win.previewVisible && win.detailsFit
-                Layout.topMargin: parent.parent.barHeight
+                Layout.topMargin: parent.parent.barHeight + bookmarksLayerItem.barHeight
                 Layout.preferredWidth: 300
                 Layout.fillHeight: true
                 folderPane: win.activePane
                 onFinished: win.activePane.focusView()
             }
         }
+
+        // The bookmarks bar under the path bars, and its dialogs: under a
+        // file chooser's bar, as the panes' dialogs are.
+        BookmarksLayer { id: bookmarksLayerItem; anchors.fill: parent; barTop: parent.barHeight }
 
         Loader {
             id: chooserBar

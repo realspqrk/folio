@@ -21,6 +21,8 @@ FocusScope {
     // so the rightmost pane's buttons sit at the window's edge.
     property int barExtension: 0
     property int barLeft: 0
+    // The path bar's star, which the bookmark bubble hangs from.
+    readonly property var bookmarkStar: pathBar.star
 
     // Each pane has its own view. The window's own pane is the one
     // remembered between launches; the right pane of a split starts with
@@ -54,9 +56,9 @@ FocusScope {
     // and clipboard shortcuts stand aside so typing works.
     // Whether a path is being typed in the pane's bar.
     readonly property bool editingPath: pathBar.editing
-    readonly property bool typing: asking || pathBar.editing || pathBar.searchFocused || (!!host && host.helpVisible)
+    readonly property bool typing: asking || pathBar.editing || pathBar.searchFocused || (!!host && (host.helpVisible || host.bookmarksLayer.busy))
     // Whether one of the pane's dialogs is up, waiting on an answer.
-    readonly property bool asking: rename.visible || confirm.visible || clash.visible || formatDialog.visible || backend.mounter.asking
+    readonly property bool asking: rename.visible || confirm.visible || clash.visible || formatDialog.visible || backend.mounter.asking || (!!host && host.bookmarksLayer.asking)
     // Keys for the pane as a whole (undo, a new window, typing a path) work
     // wherever the keyboard is; keys for its files only while the files
     // have it, not while Tab has put it in the sidebar or the details, where
@@ -329,6 +331,8 @@ FocusScope {
         onEmptyTrashRequested: pane.emptyTrash()
         onPinRequested: (path) => pane.togglePin(path)
         onBurnRequested: (path, drive) => pane.confirmBurn(path, drive)
+        onBookmarkRequested: (path) => { if (pane.host) pane.host.bookmarksLayer.bookmark(path) }
+        host: pane.host
     }
 
     ColumnLayout {
@@ -337,7 +341,7 @@ FocusScope {
 
         // Room for the path bar, which is drawn on top so it can reach over
         // the details column.
-        Item { Layout.fillWidth: true; implicitHeight: pathBar.implicitHeight }
+        Item { Layout.fillWidth: true; implicitHeight: pathBar.implicitHeight + ((!!pane.host && pane.host.bookmarksLayer.barHeight) || 0) }
         // Work that ends within a second, as most deletes and copies do,
         // never flashes the banner: what's under way shows once it has
         // taken a second. The timer starts when the work does, so progress
@@ -459,6 +463,7 @@ FocusScope {
         onTogglePreview: if (pane.host) pane.host.previewVisible = !pane.host.previewVisible
         onCycleView: pane.cycleView()
         onCloseRequested: pane.closeRequested()
+        onBookmarkRequested: (anchor) => { if (pane.host) pane.host.bookmarksLayer.bookmark(backend.path, anchor) }
     }
 
     // With two panes, a line along the top marks the one keys go to.

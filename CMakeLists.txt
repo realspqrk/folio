@@ -37,3 +37,9 @@ add_test(NAME folio_tests COMMAND folio_tests)
 set_tests_properties(folio_tests PROPERTIES ENVIRONMENT QT_QPA_PLATFORM=offscreen)
 # The bundled plugins, which the tests run against stubs.
 target_compile_definitions(folio_tests PRIVATE FOLIO_PLUGINS="${CMAKE_SOURCE_DIR}/plugins")
+
+# The bookmarks bar's model tests, in a file of their own.
+add_executable(bookmarks_tests tests/bookmarks_tests.cpp)
+target_link_libraries(bookmarks_tests PRIVATE folio_core Qt6::Test)
+add_test(NAME bookmarks_tests COMMAND bookmarks_tests)
+set_tests_properties(bookmarks_tests PROPERTIES ENVIRONMENT QT_QPA_PLATFORM=offscreen)
