@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Files (Bookmarks)
+GenericName=File Manager
+Comment=Omarchy's Files with a browser-like bookmarks bar
+Keywords=folder;file manager;explorer;browse;folio;bookmarks;
+Exec=folio-spqrk %U
+Icon=folio-spqrk
+Terminal=false
+Categories=System;FileTools;FileManager;
+MimeType=inode/directory;
+StartupWMClass=folio-spqrk

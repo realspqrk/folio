@@ -5,4 +5,4 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 cmake -S "$ROOT" -B "$ROOT/build" -DCMAKE_BUILD_TYPE=Release >/dev/null
 cmake --build "$ROOT/build" --target folio -j"$(nproc)"
 
-echo "Built $ROOT/build/folio"
+echo "Built $ROOT/build/folio-spqrk"

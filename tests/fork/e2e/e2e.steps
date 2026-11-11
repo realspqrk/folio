@@ -1,0 +1,366 @@
+# End-to-end: the bookmarks bar used as in a browser, through real clicks,
+# keys and drags (bin/test runs it). The seed is in run.sh.
+assert-seeded=names() === "Inbox,Clients,Taxes 26,Invoice April,USB backup,Fotos,Music,Videos,Globex quarterly,Notes,Personal" && bookmarks.problem === ""
+assert-all-fit=bar.fitting === 11 && layer.barVisible
+
+# A bookmark is a link: a click goes there in the pane.
+click-taxes_=@chip("Taxes 26")
+assert-went=here() === bookmarks.resolve("~/Documents/Taxes 2026")
+# A folder drops down; its first entry (one row under the chip) goes there.
+click-clients_=@chip("Clients")
+click-acme_=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 14 + 4 + 4 + 16) })()
+assert-dropdown=here() === bookmarks.resolve("~/Work/clients/acme")
+# Right-click inside an open folder: the folder stays open under the menu;
+# Delete (Open, Open in New Window, Copy Path, Add Bookmark…, New
+# Folder…, Edit…, Delete) takes the
+# entry out of the still-open folder, as in a browser.
+click-clients2_=@chip("Clients")
+rclick-globex_=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 14 + 4 + 4 + 16 + 32) })()
+assert-stays-open=!!bar.openDropDown && bar.openDropDown.menu.visible && bar.openDropDown.menu.count === 3
+key-g1_=Down
+key-g2_=Down
+key-g3_=Down
+key-g4_=Down
+key-g5_=Down
+key-g5b_=Down
+key-g5c_=Down
+key-g6_=Return
+assert-deleted-in-place=bookmarks.find("~/Work/clients/globex") !== "" && names(bookmarks.items[1].children) === "ACME Corp,Archive" && !!bar.openDropDown && bar.openDropDown.menu.visible && bar.openDropDown.menu.count === 2
+# The pointer now rests on Archive, whose submenu opens on hover as in a
+# browser: Escape closes it, then the drop-down.
+key-close-sub_=Escape
+key-close-dropdown_=Escape
+assert-dropdown-closed=!bar.openDropDown
+click-taxes2_=@chip("Taxes 26")
+# Its path is gone (a drive not plugged in): the pane says so.
+click-usb_=@chip("USB backup")
+assert-missing=win.activePane.paneBackend.message.indexOf("doesn't exist") >= 0 && here() === bookmarks.resolve("~/Documents/Taxes 2026")
+
+# The star (Ctrl+B) on a bookmarked folder edits its bookmark.
+key-star_=Ctrl+B
+assert-edits=layer.bubble.visible && !layer.bubble.added
+key-close_=Escape
+assert-closed=!layer.bubble.visible && names() === "Inbox,Clients,Taxes 26,Invoice April,USB backup,Fotos,Music,Videos,Globex quarterly,Notes,Personal"
+# On a new folder it bookmarks it right away; typing names it, Enter keeps.
+go-work_=win.activePane.paneBackend.navigate(bookmarks.resolve("~/Work"))
+key-star2_=Ctrl+B
+assert-added=layer.bubble.visible && layer.bubble.added && bookmarks.find("~/Work") !== ""
+type-name_=Desk
+key-done_=Return
+assert-named=!layer.bubble.visible && bookmarks.get(bookmarks.find("~/Work")).name === "Desk" && names().endsWith(",Personal,Desk")
+# Escape keeps what was typed too, as a browser's bubble does.
+key-star3_=Ctrl+B
+type-rename_=Bench
+key-esc_=Escape
+assert-esc-keeps=bookmarks.get(bookmarks.find("~/Work")).name === "Bench"
+# Remove takes it off again.
+key-star4_=Ctrl+B
+remove_=layer.bubble.removeIt()
+assert-removed=bookmarks.find("~/Work") === "" && !layer.bubble.visible
+
+# Drag to reorder: Fotos in front of Inbox, then behind Taxes 26.
+press-fotos_=@chip("Fotos")
+move-fotos_=@at("Inbox", 0.15)
+release-fotos_=@at("Inbox", 0.15)
+assert-before=names().startsWith("Fotos,Inbox,Clients,Taxes 26,")
+press-fotos2_=@chip("Fotos")
+move-fotos2_=@at("Taxes 26", 0.9)
+release-fotos2_=@at("Taxes 26", 0.9)
+assert-after=names().startsWith("Inbox,Clients,Taxes 26,Fotos,")
+# Dropped on a folder's middle, a bookmark goes into it.
+press-inbox_=@chip("Inbox")
+move-inbox_=@chip("Clients")
+release-inbox_=@chip("Clients")
+assert-into=names().startsWith("Clients,Taxes 26,") && names(bookmarks.items[0].children) === "ACME Corp,Archive,Inbox"
+
+# Drop-downs behave as one menu bar: a second click closes, pointing at
+# another folder switches to it.
+click-open_=@chip("Clients")
+click-again_=@chip("Clients")
+assert-toggles=!bar.openDropDown
+click-open2_=@chip("Clients")
+move-switch_=@chip("Personal")
+assert-switches=!!bar.openDropDown && bar.openDropDown.source === bookmarks.items[bookmarks.items.length - 1].id
+key-close-p_=Escape
+# A folder inside a drop-down has its own right-click menu: Add Bookmark…,
+# New Folder…, Rename…, Delete.
+click-open3_=@chip("Clients")
+move-archive_=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38 + 32 * 1) })()
+rclick-archive_=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38 + 32 * 1) })()
+key-r1_=Down
+key-r2_=Down
+key-r3_=Down
+key-r4_=Return
+assert-folder-menu=layer.dialog.visible && layer.dialog.mode === "renameFolder" && bookmarks.get(layer.dialog.itemId).name === "Archive"
+key-r5_=Escape
+
+# Drag inside a drop-down: ACME Corp below Archive, then into Archive, then
+# out onto the bar in front of Taxes 26.
+click-open4_=@chip("Clients")
+press-acme_=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38) })()
+move-acme_=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38 + 32 + 12) })()
+release-acme_=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38 + 32 + 12) })()
+assert-reordered-in-menu=names(bookmarks.get(bookmarks.items[0].id).children) === "Archive,ACME Corp,Inbox" && !!bar.openDropDown
+press-acme2_=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38 + 32) })()
+move-acme2_=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38) })()
+release-acme2_=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38) })()
+assert-into-row=names(bookmarks.items[0].children) === "Archive,Inbox" && names(bookmarks.items[0].children[0].children) === "Old notes,ACME Corp"
+press-inbox2_=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38 + 32) })()
+move-inbox2_=@at("Taxes 26", 0.1)
+release-inbox2_=@at("Taxes 26", 0.1)
+assert-dragged-out=names().startsWith("Clients,Inbox,Taxes 26,") && names(bookmarks.items[0].children) === "Archive" && !bar.openDropDown
+
+# F6: keys to the bar (on Clients, first now), → and ← move, ⏎ drops it
+# down, Escape twice back.
+# (The pointer goes out of the way first: a menu opening under it follows it.)
+move-away_=640,600
+key-f6_=F6
+assert-bar-focus=bar.activeFocus && bar.keyIndex === 0
+key-right_=Right
+assert-key-moves=bar.keyIndex === 1
+key-left_=Left
+key-open_=Return
+assert-key-open=!!bar.openDropDown && bar.openDropDown.source === bookmarks.items[0].id && bar.openDropDown.menu.currentIndex === 0
+key-esc-menu_=Escape
+assert-back-on-bar=!bar.openDropDown && bar.activeFocus
+key-esc-bar_=Escape
+assert-left-bar=!bar.activeFocus
+
+# The star remembers the folder last used, as a browser does.
+go-music_=win.activePane.paneBackend.navigate(bookmarks.resolve("~/Work/clients"))
+key-star5_=Ctrl+B
+pick_=layer.bubble.parentId = bookmarks.items[0].id
+key-done5_=Return
+go-pictures_=win.activePane.paneBackend.navigate(bookmarks.resolve("~/Pictures"))
+key-star6_=Ctrl+B
+assert-remembers=bookmarks.get(bookmarks.find("~/Pictures")).parentId === bookmarks.items[0].id
+key-done6_=Escape
+
+# A relative path in the editor is the pane's folder's, as Tab completes it.
+go-work2_=win.activePane.paneBackend.navigate(bookmarks.resolve("~/Work"))
+add_=bar.addRequested(bookmarks.resolve("~/Work"), "", -1)
+key-tab_=Tab
+key-all_=Ctrl+A
+type-rel_=clients/globex/
+key-add_=Return
+assert-relative=!layer.dialog.visible && bookmarks.items[bookmarks.items.length - 1].path === "~/Work/clients/globex"
+
+
+# Right-click a bookmark, Delete from the keyboard: Open, Open in New
+# Window, Copy Path, Add Bookmark…, New Folder…, Edit…, Delete.
+rclick-taxes_=@chip("Taxes 26")
+key-d1_=Down
+key-d2_=Down
+key-d3_=Down
+key-d4_=Down
+key-d5_=Down
+key-d6_=Down
+key-d7_=Down
+key-delete_=Return
+assert-deleted=bookmarks.find("~/Documents/Taxes 2026") === ""
+
+# The editor: name, path (like a URL) and folder.
+edit_=bar.editRequested(bookmarks.items[bookmarks.items.length - 1].id)
+assert-editor=layer.dialog.visible && layer.dialog.mode === "edit"
+type-edit_=Scratch
+key-save_=Return
+assert-edited=names().endsWith(",Scratch") && !layer.dialog.visible
+# A new folder, from the bar's menu.
+newfolder_=bar.newFolderRequested("", -1)
+type-folder_=Projects
+key-create_=Return
+assert-folder=bookmarks.items[bookmarks.items.length - 1].type === "folder" && names().endsWith(",Projects")
+
+# The bubble writes only what was changed in it: left untouched, it doesn't
+# undo a rename and move made meanwhile (as from another window).
+go-music_=win.activePane.paneBackend.navigate(bookmarks.resolve("~/Music"))
+key-star-m_=Ctrl+B
+elsewhere_=bookmarks.edit(bookmarks.find("~/Music"), "Renamed elsewhere", "", bookmarks.items[0].id)
+key-esc-m_=Escape
+assert-untouched=bookmarks.get(bookmarks.find("~/Music")).name === "Renamed elsewhere" && bookmarks.get(bookmarks.find("~/Music")).parentId === bookmarks.items[0].id
+# A draft that can't be saved (its folder deleted meanwhile) stays, saying
+# why; another folder, and it's kept.
+go-videos_=win.activePane.paneBackend.navigate(bookmarks.resolve("~/Videos"))
+key-star-v_=Ctrl+B
+pick-personal_=layer.bubble.parentId = bookmarks.items.find(i => i.name === "Personal").id
+type-draft_=Kept draft
+gone_=bookmarks.remove(bookmarks.items.find(i => i.name === "Personal").id)
+key-done-v_=Return
+assert-draft-kept=layer.bubble.visible && layer.bubble.problem.length > 0
+pick-bar_=layer.bubble.parentId = ""
+key-done-v2_=Return
+assert-draft-saved=!layer.bubble.visible && bookmarks.get(bookmarks.find("~/Videos")).name === "Kept draft"
+
+# Tab completes from the folder the editor opened in, as saving does, even
+# when the pane moves on meanwhile.
+go-work3_=win.activePane.paneBackend.navigate(bookmarks.resolve("~/Work"))
+add2_=bar.addRequested(bookmarks.resolve("~/Work"), "", -1)
+key-tab2_=Tab
+key-all2_=Ctrl+A
+type-cli_=cli
+go-home_=win.activePane.paneBackend.navigate(bookmarks.resolve("~"))
+key-tab3_=Tab
+key-add2_=Return
+assert-same-base=!layer.dialog.visible && bookmarks.items[bookmarks.items.length - 1].path === "~/Work/clients"
+
+# With the keys on the bar: a bookmark opened from a drop-down hands them
+# back to the files; Shift+F10 in a drop-down; Ctrl+Shift+B still works.
+move-away2_=640,600
+key-f6b_=F6
+key-home_=Home
+key-open-b_=Return
+key-ctx_=Shift+F10
+assert-menu-key=!!bar.openDropDown && String(win.activeFocusItem).startsWith("QQuickColumn")
+key-ctx-esc_=Escape
+key-first-down_=Down
+key-first_=Return
+assert-keys-back=!bar.activeFocus && !bar.openDropDown && !win.typing
+key-f6c_=F6
+key-hide2_=Ctrl+Shift+B
+assert-hide-from-bar=!layer.barVisible && !bar.activeFocus
+key-show2_=Ctrl+Shift+B
+# The chip the keys are on goes away: they stay on one that's there.
+key-f6d_=F6
+key-end_=End
+drop-last_=bookmarks.remove(bookmarks.items[bookmarks.items.length - 1].id)
+assert-key-kept=bar.activeFocus && bar.keyIndex < bar.keyCount
+key-esc-d_=Escape
+
+# The editor, too, writes only what was changed in it.
+edit-inbox_=bar.editRequested(bookmarks.items.find(i => i.name === "Fotos").id)
+type-fotos_=Holiday
+elsewhere2_=bookmarks.edit(bookmarks.items.find(i => i.name === "Fotos").id, "", "~/Documents", bookmarks.items[0].id)
+key-save-f_=Return
+assert-editor-partial=!layer.dialog.visible && bookmarks.get(bookmarks.find("~/Documents")).name === "Holiday" && bookmarks.get(bookmarks.find("~/Documents")).parentId === bookmarks.items[0].id
+# A new folder that can't be made (its place deleted meanwhile) keeps the
+# typed name and says why: Tab to Folder, Space, Down to the last entry
+# (New Folder…; Qt's menus don't wrap), ⏎.
+go-dl_=win.activePane.paneBackend.navigate(bookmarks.resolve("~/Downloads"))
+key-star-n_=Ctrl+B
+make-place_=bookmarks.addFolder("", "Doomed")
+pick-doomed_=layer.bubble.parentId = bookmarks.items.find(i => i.name === "Doomed").id
+key-tab-n_=Tab
+key-space-n_=space
+key-dn0_=Down
+key-dn1_=Down
+key-dn2_=Down
+key-dn3_=Down
+key-dn4_=Down
+key-dn5_=Down
+key-dn6_=Down
+key-dn7_=Down
+key-dn8_=Down
+key-dn9_=Down
+key-dn10_=Down
+key-dn11_=Down
+key-dn12_=Down
+key-dn13_=Down
+key-dn14_=Down
+key-new-n_=Return
+type-folder-n_=Kept
+gone-doomed_=bookmarks.remove(bookmarks.items.find(i => i.name === "Doomed").id)
+key-make-n_=Return
+assert-folder-draft=layer.bubble.visible && layer.bubble.problem.length > 0 && String(win.activeFocusItem.text) === "Kept"
+key-esc-n1_=Escape
+pick-bar-n_=layer.bubble.parentId = ""
+key-esc-n2_=Escape
+# Open from the right-click menu with the keys on the bar: the keys go to
+# the files after, as with ⏎.
+move-away3_=640,600
+key-f6e_=F6
+key-home2_=Home
+key-right3_=Right
+key-ctx2_=Shift+F10
+key-open-down_=Down
+key-open-ctx_=Return
+assert-ctx-open-leaves=!bar.activeFocus && !win.typing
+# An open » closes when the window's resized, rather than go stale.
+resize-mid_=900x800
+more2_=bar.dropDown("»", bar.chipRow.children[bar.chipRow.children.length - 1], false)
+resize-mid2_=760x800
+assert-more-closes=!bar.openDropDown
+resize-back_=1280x800
+
+# A rename in the bubble, then a click on a chip: the click isn't lost to
+# the bar redrawing (chips are kept across changes).
+go-pics2_=win.activePane.paneBackend.navigate(bookmarks.resolve("~/Work/Target"))
+key-star-t_=Ctrl+B
+type-t_=Renamed target
+click-chip-after_=@chip("Clients")
+assert-click-kept=!layer.bubble.visible && bookmarks.get(bookmarks.find("~/Work/Target")).name === "Renamed target" && !!bar.openDropDown
+key-esc-t_=Escape
+# A name ending in a space is a different folder: its bookmark goes there.
+go-space_=win.activePane.paneBackend.navigate(bookmarks.resolve("~/Work") + "/Target ")
+key-star-s_=Ctrl+B
+type-s_=Spaced
+on-bar-s_=layer.bubble.parentId = ""
+key-done-s_=Return
+go-home3_=win.activePane.paneBackend.navigate(bookmarks.resolve("~"))
+click-spaced_=@chip("Spaced")
+assert-exact-path=here() === bookmarks.resolve("~/Work") + "/Target "
+# Edited by name only in the editor, it still goes to the folder with the space.
+edit-spaced_=bar.editRequested(bookmarks.items.find(i => i.name === "Spaced").id)
+type-spaced_=Spaced out
+key-save-spaced_=Return
+go-home4_=win.activePane.paneBackend.navigate(bookmarks.resolve("~"))
+click-spaced2_=@chip("Spaced out")
+assert-edit-keeps-path=here() === bookmarks.resolve("~/Work") + "/Target "
+# Add Bookmark… in that folder: the prefilled path, untouched, stays exact,
+# also when only the name is changed.
+go-spaced2_=win.activePane.paneBackend.navigate(bookmarks.resolve("~/Work") + "/Target ")
+add-here_=bar.addRequested(win.activePane.paneBackend.path, "", -1)
+type-add-name_=Added exact
+key-add-exact_=Return
+assert-add-exact=bookmarks.items[bookmarks.items.length - 1].name === "Added exact" && bookmarks.items[bookmarks.items.length - 1].path === "~/Work/Target "
+# Show in Folder selects the exact file, not its trimmed twin.
+add-note_=bookmarks.add("", "Spaced note", bookmarks.resolve("~/Work") + "/note.txt ")
+reveal_=bar.revealItem(bookmarks.items.find(i => i.name === "Spaced note"))
+assert-reveal-exact=here() === bookmarks.resolve("~/Work") && win.activePane.current.path === bookmarks.resolve("~/Work") + "/note.txt "
+# A bookmark deleted (elsewhere) while its bubble holds an edit: the bubble
+# just goes, as a browser's does.
+key-star-d_=Ctrl+B
+type-d_=Edited
+gone-d_=bookmarks.remove(bookmarks.find(here()))
+key-esc-gone_=Escape
+assert-gone-closes=!layer.bubble.visible && bookmarks.find(here()) === ""
+# The star again on a draft kept after a failed save comes back to it.
+key-star-k_=Ctrl+B
+make-k_=bookmarks.addFolder("", "Brief")
+pick-k_=layer.bubble.parentId = bookmarks.items.find(i => i.name === "Brief").id
+type-k_=Draft to keep
+gone-k_=bookmarks.remove(bookmarks.items.find(i => i.name === "Brief").id)
+key-fail-k_=Return
+again-k_=layer.bookmark(here())
+assert-star-keeps=layer.bubble.visible && layer.bubble.problem.length > 0 && String(win.activeFocusItem.text) === "Draft to keep"
+pick-bar-k_=layer.bubble.parentId = ""
+key-done-k_=Return
+# Keys on the bar, then the pointer: a click opens and hands the keys to
+# the files; hiding the bar from its own menu does too.
+move-away4_=640,600
+key-f6f_=F6
+click-globex-f6_=@chip("Globex quarterly")
+assert-pointer-leaves=!bar.activeFocus && !win.typing && here() === bookmarks.resolve("~/Work/clients/globex")
+key-f6g_=F6
+hide-ctx_=bar.hideRequested()
+assert-hide-leaves=!layer.barVisible && !bar.activeFocus && !win.typing
+key-show3_=Ctrl+Shift+B
+
+# Delete behind an open bookmark menu trashes nothing: Qt blocks shortcuts
+# outside a popup that closes on Escape (the pane's Delete among them).
+go-work-del_=win.activePane.paneBackend.navigate(bookmarks.resolve("~/Work"))
+key-all-del_=Ctrl+A
+click-del-menu_=@chip("Clients")
+key-del-menu_=Delete
+assert-delete-blocked=!!bar.openDropDown && win.activePane.paneBackend.folder.count > 0 && win.activePane.paneBackend.folder.count === win.activePane.paneBackend.folder.selectedCount
+key-esc-del_=Escape
+
+# What doesn't fit goes behind ».
+resize-narrow_=720x800
+assert-overflow=bar.fitting < bookmarks.items.length && bar.contentsOf("»").length === bookmarks.items.length - bar.fitting
+resize-wide_=1280x800
+
+# Ctrl+Shift+B hides the bar and gives its room back.
+key-hide_=Ctrl+Shift+B
+assert-hidden=!layer.barVisible && layer.barHeight === 0
+key-show_=Ctrl+Shift+B
+assert-shown=layer.barVisible && layer.barHeight > 0

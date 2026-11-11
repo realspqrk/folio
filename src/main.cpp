@@ -44,10 +44,11 @@ static QString startPath(const QStringList &args, QString *select) {
 // Omarchy points fontconfig's monospace at the font picked in its menu, so
 // asking for "monospace" follows the user's choice.
 static void setUp(QGuiApplication &app) {
-    app.setApplicationName("folio");
-    // Settings (the chosen view) go to ~/.config/folio/folio.conf.
-    app.setOrganizationName("folio");
-    app.setWindowIcon(QIcon::fromTheme("folio"));
+    app.setApplicationName("folio-spqrk");
+    // Settings (the chosen view) go to ~/.config/folio-spqrk/folio-spqrk.conf,
+    // bookmarks beside them: apart from Omarchy's own folio.
+    app.setOrganizationName("folio-spqrk");
+    app.setWindowIcon(QIcon::fromTheme("folio-spqrk"));
     QFont font("monospace");
     font.setStyleHint(QFont::Monospace);
     font.setPixelSize(13);
@@ -90,7 +91,7 @@ static int preview(QGuiApplication &app) {
 
     // Its own app id, so window rules can float it the way Omarchy floats
     // Sushi's previewer.
-    app.setDesktopFileName("folio-preview");
+    app.setDesktopFileName("folio-spqrk-preview");
 
     Translator translator;
     app.installTranslator(&translator);
@@ -122,7 +123,7 @@ int main(int argc, char *argv[]) {
 
     // Matches the window to folio.desktop, so the compositor (Wayland app_id)
     // and the launcher pick up the installed icon.
-    app.setDesktopFileName("folio");
+    app.setDesktopFileName("folio-spqrk");
 
     // Installed before anything is translated, and every qsTr() binding is
     // re-evaluated when the Omarchy language changes.

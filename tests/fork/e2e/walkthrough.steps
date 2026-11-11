@@ -1,0 +1,55 @@
+# The bookmarks bar, walked through as a person would (1280x800), for
+# visual review. Rows in a drop-down: chip centre + 38 + 32 per row.
+main=
+click-dropdown=@chip("Clients")
+move-submenu=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38 + 64) })()
+# Right-click inside the open folder: its menu over it, the folder stays.
+rclick-in-dropdown=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38 + 32) })()
+key-a_=Escape
+# Right-click on a folder row in the drop-down.
+move-b_=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38 + 64) })()
+rclick-folder-row=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38 + 64) })()
+key-b_=Escape
+# Pointing at another folder switches the open drop-down (an empty one).
+move-switch=@chip("Personal")
+key-c_=Escape
+# Dragging a bookmark inside the drop-down.
+click-open_=@chip("Clients")
+press-drag-menu_=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38) })()
+move-drag-menu=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38 + 32 + 12) })()
+release-drag-menu=@(function() { const p = chip("Clients").split(","); return p[0] + "," + (+p[1] + 38 + 32 + 12) })()
+key-d_=Escape
+# Ctrl+B: added at once, named in the bubble; its folder chooser.
+move-away_=640,600
+key-added=Ctrl+B
+type-name_=Start
+key-tab_=Tab
+key-picker=space
+key-e_=Escape
+key-done=Escape
+star-edit=layer.bookmark(win.activePane.paneBackend.path)
+key-f_=Escape
+rclick-bookmark-menu=@chip("Inbox")
+key-g_=Escape
+rclick-bar-menu=1240,78
+key-h_=Escape
+edit-dialog=bar.editRequested(bookmarks.items[0].id)
+key-i_=Escape
+newfolder-dialog=bar.newFolderRequested("", -1)
+key-j_=Escape
+# Chip drag: Fotos in front of Inbox.
+press-drag_=@chip("Fotos")
+move-drag=@at("Inbox", 0.15)
+release-dropped=@at("Inbox", 0.15)
+# Keys on the bar: F6, then → twice.
+key-f6=F6
+key-right_=Right
+key-right2=Right
+key-k_=Escape
+resize-narrow=720x800
+more-menu=bar.dropDown("»", bar.chipRow.children[bar.chipRow.children.length - 1], false)
+key-l_=Escape
+key-hide=Ctrl+Shift+B
+key-show_=Ctrl+Shift+B
+resize-wide_=1500x800
+key-split=Ctrl+Alt+N

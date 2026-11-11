@@ -1,0 +1,51 @@
+#!/usr/bin/env python3
+"""Git merge driver for src/i18n/en.json: a three-way merge by key.
+
+Keys added on either side are kept, keys removed on either side go, and a
+key both sides changed differently is a real conflict: the driver fails and
+the rebase stops for a person. Written as upstream writes the catalog:
+sorted, two-space indent, UTF-8, trailing newline.
+
+  git config merge.json-union.driver 'fork/bin/json-union-merge %O %A %B'
+  .gitattributes: src/i18n/en.json merge=json-union
+"""
+import json
+import sys
+
+
+def load(path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def main(base_path, ours_path, theirs_path):
+    try:
+        base, ours, theirs = load(base_path), load(ours_path), load(theirs_path)
+    except (OSError, ValueError) as error:
+        print(f"json-union-merge: {error}", file=sys.stderr)
+        return 1
+    merged, clashes = {}, []
+    for key in sorted(set(base) | set(ours) | set(theirs)):
+        b, o, t = base.get(key), ours.get(key), theirs.get(key)
+        if o == t:
+            value = o
+        elif o == b:
+            value = t
+        elif t == b:
+            value = o
+        else:
+            clashes.append(key)
+            continue
+        if value is not None:
+            merged[key] = value
+    if clashes:
+        for key in clashes:
+            print(f"json-union-merge: both sides changed {key!r}", file=sys.stderr)
+        return 1
+    with open(ours_path, "w", encoding="utf-8") as f:
+        f.write(json.dumps(merged, ensure_ascii=False, indent=2) + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(*sys.argv[1:4]))

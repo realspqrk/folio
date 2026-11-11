@@ -1,0 +1,8 @@
+[Unit]
+Description=Prepare the bookmarks-bar fork of Files on today's upstream (fork/bin/folio-sync check)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/folio-sync check
+Nice=10

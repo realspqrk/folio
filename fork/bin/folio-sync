@@ -1,0 +1,300 @@
+#!/usr/bin/env bash
+# folio-sync — keeps the fork (upstream/main + the bookmarks bar) close to
+# omacom/folio. Works in its own clone, never in the daily checkout.
+#
+#   folio-sync check [--force] [--from <repo> <branch>]
+#                      fetch, rebase the fork onto upstream/main, build, test,
+#                      package; publishes nothing (the weekly timer runs this)
+#   folio-sync status  what the last run found, for you or a session
+#   folio-sync try     open the tested candidate, before installing it
+#   folio-sync publish push the candidate: fork main ← upstream (fast-forward),
+#                      spqrk ← candidate (lease on the SHA the run saw)
+#   folio-sync install install the candidate's package (asks for your password)
+#   folio-sync rollback   reinstall the package installed before
+#   folio-sync setup   create the clone, merge driver and weekly timer
+#
+# Playbook: fork/playbooks/upstream-sync.md. Status: $DATA/status.
+set -Eeuo pipefail
+
+SELF="$(dirname "$(readlink -f "$0")")"
+DEV="${FOLIO_DEV:-$HOME/Work/folio}"
+DATA="${FOLIO_SYNC_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/folio-sync}"
+REPO="$DATA/repo"
+PKGS="$DATA/packages"
+LOGS="$DATA/logs"
+STATUS="$DATA/status"
+BRANCH=spqrk
+ORIGIN_URL=https://github.com/realspqrk/folio.git
+UPSTREAM_URL=https://github.com/omacom/folio.git
+
+say() { printf '%s\n' "$*" >&2; }
+notify() {  # title, body
+  command -v notify-send >/dev/null && notify-send -a "Files (Bookmarks)" "$1" "$2" || true
+  say "$1: $2"
+}
+get() { [ -f "$STATUS" ] && sed -n "s/^$1=//p" "$STATUS" | tail -1 || true; }
+put() {  # key=value ...: a new run's status; what's installed carries over
+  mkdir -p "$DATA"
+  local keep k
+  keep=$(for k in installed previous published last_ready_candidate last_ready_package last_ready_from; do v=$(get "$k"); if [ -n "$v" ]; then printf '%s=%s\n' "$k" "$v"; fi; done)
+  {
+    printf 'time=%s\n' "$(date -Is)"
+    printf '%s\n' "$@"
+    if [ -n "$keep" ]; then printf '%s\n' "$keep"; fi
+  } > "$STATUS.new"
+  mv "$STATUS.new" "$STATUS"
+}
+remember() {  # key value: keeps the rest of the status
+  mkdir -p "$DATA"; touch "$STATUS"
+  { grep -v "^$1=" "$STATUS" || true; printf '%s=%s\n' "$1" "$2"; } > "$STATUS.new" && mv "$STATUS.new" "$STATUS"
+}
+git_() { git -C "$REPO" "$@"; }
+
+# One lock for every command that reads or changes the clone, the status or
+# the packages: `check` gives up at once when busy, the others wait a little.
+lock() {  # wait-seconds (0: don't wait)
+  mkdir -p "$DATA"
+  exec 9>"$DATA/lock"
+  if [ "$1" = 0 ]; then flock -n 9; else flock -w "$1" 9; fi || { say "another folio-sync is running"; exit 75; }
+}
+
+# Anything unexpected in a check (a fetch, the build, a full disk) still
+# ends in a status and a notification, never in a stale "ready".
+STAGE=start LOG="" UP="" FORK="" SRC="" FROM=""
+on_error() {
+  local code=$?
+  trap - ERR
+  put state=error stage="$STAGE" upstream="$UP" fork="$FORK" source="$SRC" from="$FROM" log="$LOG" \
+      reason="unexpected failure (exit $code) at $STAGE"
+  notify "Files (Bookmarks) — sync needs you" "folio-sync stopped at $STAGE. Nothing pushed. folio-sync status"
+  exit "$code"
+}
+
+prepare_clone() {
+  mkdir -p "$DATA" "$PKGS" "$LOGS"
+  if [ ! -d "$REPO/.git" ]; then
+    git clone -q --origin origin "$ORIGIN_URL" "$REPO"
+  fi
+  git_ remote get-url upstream >/dev/null 2>&1 || git_ remote add upstream "$UPSTREAM_URL"
+  git_ remote set-url --push upstream no_push
+  # en.json merges by key; resolutions a person made are offered again
+  # (but never committed without them: autoupdate stays off).
+  # The driver runs from a copy of its own: mid-rebase, the commit that
+  # carries it may not be applied yet.
+  install -m755 "$SELF/json-union-merge" "$DATA/json-union-merge"
+  git_ config merge.json-union.name "en.json by key"
+  git_ config merge.json-union.driver "$DATA/json-union-merge %O %A %B"
+  git_ config rerere.enabled true
+  git_ config rerere.autoupdate false
+  printf 'src/i18n/en.json merge=json-union\n' > "$REPO/.git/info/attributes"
+}
+
+cmd_check() {
+  local force=0 from_repo="" from_branch=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --force) force=1 ;;
+      --from) from_repo="$2"; from_branch="$3"; shift 2 ;;
+      *) say "unknown option $1"; exit 64 ;;
+    esac
+    shift
+  done
+  lock 0
+  # What was asked for, kept even when a fetch fails.
+  FROM="${from_repo:+$from_repo $from_branch}"
+  mkdir -p "$LOGS"
+  local log="$LOGS/check-$(date +%Y%m%d-%H%M%S).log"
+  LOG=$log
+  trap on_error ERR
+  STAGE=prepare; prepare_clone >>"$log" 2>&1
+  STAGE=fetch
+  git_ fetch -q --prune origin >>"$log" 2>&1
+  git_ fetch -q --prune upstream >>"$log" 2>&1
+  local up fork source
+  up=$(git_ rev-parse upstream/main); UP=$up
+  fork=$(git_ rev-parse "origin/$BRANCH"); FORK=$fork
+  source="origin/$BRANCH"
+  if [ -n "$from_repo" ]; then
+    git_ fetch -q "$from_repo" "+$from_branch:refs/folio-sync/from" >>"$log" 2>&1
+    source=refs/folio-sync/from
+  fi
+  local src_sha; src_sha=$(git_ rev-parse "$source"); SRC=$src_sha
+  # The last good candidate came from a repair (--from) not published yet:
+  # a plain check builds origin/spqrk instead, without the repair.
+  local from=$FROM last_from last_cand
+  last_from=$(get last_ready_from); last_cand=$(get last_ready_candidate)
+  if [ -z "$from" ] && [ -n "$last_from" ] && [ -n "$last_cand" ] && [ "$(get published)" != "$last_cand" ]; then
+    say "the last good candidate was built from $last_from, not published yet; for it: folio-sync check --from $last_from"
+  fi
+
+  # Nothing new since the last good run, and its build still in place: say
+  # so and stop.
+  if [ $force = 0 ] && [ "$(get state)" = ready ] && [ "$(get upstream)" = "$up" ] && [ "$(get source)" = "$src_sha" ] \
+     && [ "$(git_ rev-parse HEAD)" = "$(get candidate)" ] && [ -x "$REPO/build/folio-spqrk" ] && [ -f "$(get package)" ]; then
+    say "nothing new: upstream $(git_ rev-parse --short "$up"), candidate ready ($(get package))"
+    trap - ERR
+    return 0
+  fi
+  # Upstream rewrote its history: a person decides.
+  if ! git_ merge-base --is-ancestor "origin/main" "$up"; then
+    put state=stopped stage=mirror upstream="$up" fork="$fork" source="$src_sha" from="$from" log="$log" \
+        reason="upstream/main is no longer a fast-forward of the fork's main"
+    notify "Files (Bookmarks) — sync needs you" "Upstream rewrote its history; nothing changed. folio-sync status"
+    trap - ERR
+    return 4
+  fi
+
+  local behind; behind=$(git_ rev-list --count "$src_sha..$up")
+  # From here the old candidate is gone: nothing may use it until this run
+  # says ready again.
+  put state=running stage=rebase upstream="$up" fork="$fork" source="$src_sha" from="$from" log="$log" behind="$behind"
+  # The clone is disposable: whatever a build left (makepkg rewrites
+  # PKGBUILD's pkgver) goes before the next candidate.
+  STAGE=rebase
+  git_ rebase --abort >/dev/null 2>&1 || true
+  git_ reset -q --hard
+  git_ clean -qfdx -e build
+  git_ checkout -q -f -B candidate "$src_sha"
+  if ! git_ rebase -q "$up" >>"$log" 2>&1; then
+    local files; files=$(git_ diff --name-only --diff-filter=U | tr '\n' ' ')
+    git_ rebase --abort || true
+    put state=conflict stage=rebase upstream="$up" fork="$fork" source="$src_sha" from="$from" log="$log" files="$files" behind="$behind"
+    notify "Files (Bookmarks) — sync needs you" "Conflict in ${files:-?}. Nothing pushed, your install untouched. folio-sync status"
+    trap - ERR
+    return 2
+  fi
+  local cand; cand=$(git_ rev-parse HEAD)
+
+  STAGE=test
+  # The locale upstream's CI tests in (names sort by it), whatever this
+  # session's is.
+  if ! (cd "$REPO" && timeout 3600 nice -n 10 dbus-run-session -- env LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 bin/test) >>"$log" 2>&1; then
+    local failed; failed=$( (grep -E '^FAIL|FAIL!|e2e: FAILED|error:' "$log" || true) | head -n 5 | tr '\n' ' ')
+    put state=red stage=test upstream="$up" fork="$fork" source="$src_sha" from="$from" candidate="$cand" log="$log" failed="$failed" behind="$behind"
+    notify "Files (Bookmarks) — sync needs you" "Tests failed: ${failed:-see log}. Nothing pushed. folio-sync status"
+    trap - ERR
+    return 3
+  fi
+
+  STAGE=package
+  rm -f "$REPO"/fork/pkg/*.pkg.tar.*
+  local made=0
+  (cd "$REPO/fork/pkg" && makepkg -f --noconfirm) >>"$log" 2>&1 || made=$?
+  git_ checkout -q -- fork/pkg/PKGBUILD
+  if [ $made != 0 ]; then
+    put state=red stage=package upstream="$up" fork="$fork" source="$src_sha" from="$from" candidate="$cand" log="$log" behind="$behind"
+    notify "Files (Bookmarks) — sync needs you" "The package didn't build. folio-sync status"
+    trap - ERR
+    return 3
+  fi
+  local pkg; pkg=$(ls "$REPO"/fork/pkg/folio-spqrk-*.pkg.tar.zst | head -n 1)
+  mv "$pkg" "$PKGS/"
+  pkg="$PKGS/$(basename "$pkg")"
+  put state=ready stage=done upstream="$up" fork="$fork" source="$src_sha" from="$from" candidate="$cand" \
+      package="$pkg" log="$log" behind="$behind"
+  remember last_ready_candidate "$cand"
+  remember last_ready_package "$pkg"
+  remember last_ready_from "$from"
+  trap - ERR
+  notify "Files (Bookmarks) — ready" "$behind upstream commits in, all tests green. Try: folio-sync try · then publish, install"
+}
+
+cmd_status() {
+  [ -f "$STATUS" ] || { say "no run yet: folio-sync check"; exit 1; }
+  cat "$STATUS"
+  local log; log=$(get log)
+  if [ -n "$log" ] && [ "$(get state)" != ready ] && [ -f "$log" ]; then
+    printf '\n--- last lines of %s\n' "$log"; tail -n 25 "$log"
+  fi
+}
+
+need_ready() {
+  [ "$(get state)" = ready ] || { say "no tested candidate (state: $(get state)); run folio-sync check"; exit 1; }
+}
+
+cmd_try() {
+  lock 10
+  need_ready
+  local from; from=$(get from)
+  local bin="$REPO/build/folio-spqrk"
+  [ -x "$bin" ] && [ "$(git_ rev-parse HEAD)" = "$(get candidate)" ] \
+    || { say "the tested build isn't in the clone any more; run folio-sync check --force${from:+ --from $from}"; exit 1; }
+  # The lock stays here: the app mustn't hold it while it runs.
+  setsid uwsm-app -- "$bin" >/dev/null 2>&1 < /dev/null 9>&- &
+  say "asked to open the candidate ($(git_ rev-parse --short "$(get candidate)")) beside your installed one"
+}
+
+cmd_publish() {
+  lock 10
+  need_ready
+  prepare_clone
+  local up fork cand
+  up=$(get upstream); fork=$(get fork); cand=$(get candidate)
+  git_ fetch -q origin
+  git_ merge-base --is-ancestor origin/main "$up" || { say "fork main isn't behind $up by fast-forward; stopping"; exit 1; }
+  # Lease on the SHA this run saw: a push made meanwhile wins, this one stops.
+  git_ push --atomic origin \
+    "--force-with-lease=refs/heads/$BRANCH:$fork" \
+    "$cand:refs/heads/$BRANCH" "$up:refs/heads/main"
+  remember published "$cand"
+  say "published: main = $(git_ rev-parse --short "$up"), $BRANCH = $(git_ rev-parse --short "$cand")"
+  # The daily checkout follows when it has nothing of its own.
+  if [ -d "$DEV/.git" ] && [ -z "$(git -C "$DEV" status --porcelain)" ] \
+     && [ "$(git -C "$DEV" branch --show-current)" = "$BRANCH" ] \
+     && [ "$(git -C "$DEV" rev-parse HEAD)" = "$fork" ]; then
+    git -C "$DEV" fetch -q origin && git -C "$DEV" reset -q --keep "origin/$BRANCH"
+    say "~/Work/folio follows $BRANCH"
+  else
+    say "~/Work/folio has work of its own: rebase it onto origin/$BRANCH yourself"
+  fi
+}
+
+cmd_install() {
+  lock 10
+  need_ready
+  local pkg; pkg=$(get package)
+  pkexec pacman -U --noconfirm "$pkg"
+  remember previous "$(get installed)"
+  remember installed "$pkg"
+  say "installed $(basename "$pkg")"
+}
+
+cmd_rollback() {
+  lock 10
+  local prev; prev=$(get previous)
+  [ -n "$prev" ] && [ -f "$prev" ] || { say "no earlier package kept"; exit 1; }
+  pkexec pacman -U --noconfirm "$prev"
+  remember previous "$(get installed)"
+  remember installed "$prev"
+  say "back to $(basename "$prev")"
+}
+
+cmd_setup() {
+  lock 10
+  locale -a 2>/dev/null | grep -qi '^en_US.utf-\?8$' || say "warning: en_US.UTF-8 isn't generated; upstream's tests sort by it"
+  prepare_clone
+  mkdir -p "$HOME/.local/bin" "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+  ln -sfn "$DEV/fork/bin/folio-sync" "$HOME/.local/bin/folio-sync"
+  # The daily checkout merges en.json the same way.
+  git -C "$DEV" config merge.json-union.name "en.json by key"
+  git -C "$DEV" config merge.json-union.driver "$DATA/json-union-merge %O %A %B"
+  git -C "$DEV" config rerere.enabled true
+  git -C "$DEV" config rerere.autoupdate false
+  printf 'src/i18n/en.json merge=json-union\n' > "$DEV/.git/info/attributes"
+  cp "$DEV"/fork/systemd/folio-sync.service "$DEV"/fork/systemd/folio-sync.timer \
+     "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/"
+  systemctl --user daemon-reload
+  systemctl --user enable --now folio-sync.timer
+  systemctl --user list-timers folio-sync.timer --no-pager
+}
+
+case "${1:-check}" in
+  check) shift || true; cmd_check "$@" ;;
+  status) cmd_status ;;
+  try) cmd_try ;;
+  publish) cmd_publish ;;
+  install) cmd_install ;;
+  rollback) cmd_rollback ;;
+  setup) cmd_setup ;;
+  *) sed -n '2,20p' "$0"; exit 64 ;;
+esac

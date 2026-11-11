@@ -1,0 +1,68 @@
+# Files with the bookmarks bar (realspqrk/folio), beside Omarchy's own folio:
+# its own binary, desktop entry, icon name, settings and plugin folder, so the
+# two never share a file. Built from this checkout:
+#   cd fork/pkg && makepkg -f    (fork/bin/folio-sync does this for you)
+# Modeled on omarchy-pkgs' pkgbuilds/folio/PKGBUILD.
+pkgname=folio-spqrk
+pkgver=0
+pkgrel=1
+pkgdesc="Omarchy's Files with a browser-like bookmarks bar (realspqrk fork, installs beside folio)"
+arch=('x86_64' 'aarch64')
+url='https://github.com/realspqrk/folio'
+license=('MIT')
+options=('!debug')
+depends=(
+  'glib2'
+  'hicolor-icon-theme'
+  'libarchive'
+  'qt6-base'
+  'qt6-declarative'
+  'qt6-imageformats'
+  'qt6-multimedia'
+  'qt6-svg'
+  'qt6-wayland'
+  'xdg-utils'
+  'zlib'
+)
+optdepends=(
+  'qt6-webengine: PDF previews (Qt PDF)'
+  'ffmpegthumbnailer: video thumbnails'
+  'papers: PDF thumbnails'
+  'glycin: HEIC, JPEG XL and other image thumbnails'
+  'gvfs: browsing tailnet machines over SFTP'
+  'tailscale: listing tailnet machines and Taildrop'
+  'jq: the Tailscale plugin, which reads tailscale status with it'
+  'dropbox-cli: Dropbox sync status and share links'
+  'localsend: sharing with nearby devices'
+  'xdg-terminal-exec: Open Terminal Here'
+)
+makedepends=('cmake' 'gcc' 'make' 'git')
+
+_root() { cd "$startdir/../.." && pwd; }
+
+# Upstream's commits, then ours: 0.r<count>.g<commit>, newer with every sync.
+pkgver() {
+  cd "$(_root)"
+  printf '0.r%s.g%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+build() {
+  cd "$(_root)"
+  ./bin/build
+}
+
+package() {
+  cd "$(_root)"
+  install -Dm755 build/folio-spqrk "$pkgdir/usr/bin/folio-spqrk"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 share/folio.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/folio-spqrk.svg"
+  install -Dm644 fork/pkg/folio-spqrk.desktop "$pkgdir/usr/share/applications/folio-spqrk.desktop"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 fork/README.md "$pkgdir/usr/share/doc/$pkgname/FORK.md"
+  # The bundled plugins, under the fork's own name (src/plugins.cpp).
+  find plugins -type f | while read -r file; do
+    mode=644
+    [ -x "$file" ] && mode=755
+    install -Dm$mode "$file" "$pkgdir/usr/share/folio-spqrk/$file"
+  done
+}
