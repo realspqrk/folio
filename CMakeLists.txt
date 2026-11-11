@@ -27,6 +27,8 @@ target_compile_options(folio_core PUBLIC -Wall -Wextra)
 
 add_executable(folio src/main.cpp src/resources.qrc)
 target_link_libraries(folio PRIVATE folio_core)
+# The fork installs beside Omarchy's folio (fork/README.md).
+set_target_properties(folio PROPERTIES OUTPUT_NAME folio-spqrk)
 
 # The tests compile the same sources, run offscreen, and read the QML they
 # check straight from src/, or whole windows from the resources.
@@ -43,3 +45,7 @@ add_executable(bookmarks_tests tests/bookmarks_tests.cpp)
 target_link_libraries(bookmarks_tests PRIVATE folio_core Qt6::Test)
 add_test(NAME bookmarks_tests COMMAND bookmarks_tests)
 set_tests_properties(bookmarks_tests PROPERTIES ENVIRONMENT QT_QPA_PLATFORM=offscreen)
+
+# The fork's end-to-end driver: the app itself, driven offscreen (tests/fork/e2e).
+add_executable(folio-e2e EXCLUDE_FROM_ALL src/main.cpp src/resources.qrc tests/fork/e2e/e2e.cpp)
+target_link_libraries(folio-e2e PRIVATE folio_core Qt6::Test)

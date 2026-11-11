@@ -1,0 +1,31 @@
+# Promo shots of the bookmarks bar (fork/playbooks/promo-screenshots.md),
+# scenes from fork/promo/personas.md.
+# Privacy gate first: nothing of this machine may show (drives, tailnet).
+assert-private=places.devices.length === 0 && plugins.sections.every(s => s.rows.length === 0) && here().endsWith("/home")
+resize-window_=1440x860
+# Grid before anything is shown: offscreen, the columns view's icons aren't
+# clipped (fork/known.md), and the grid shows what's in the repo best.
+key-grid_=Ctrl+1
+# 1. In the product's repo, Ctrl+B: bookmarked at once, named, into Projects.
+go-repo_=win.activePane.paneBackend.navigate(bookmarks.resolve("~/Code/storefront"))
+move-away_=700,600
+key-star_=Ctrl+B
+into-projects_=layer.bubble.parentId = bookmarks.items.find(i => i.name === "Projects").id
+type-name_=Storefront
+hero=
+key-done_=Return
+# 2. Every project in one drop-down, side projects inside it.
+click-projects_=@chip("Projects")
+move-side_=@(function() { const p = chip("Projects").split(","); return p[0] + "," + (+p[1] + 38 + 32 * 2) })()
+dropdown=
+key-close1_=Escape
+key-close2_=Escape
+# 3. The money folders where the eyes are: Invoices dragged next to Inbox.
+press-invoices_=@at("Invoices", 0.04)
+move-invoices=@at("Projects", 0.1)
+release-invoices_=@at("Projects", 0.1)
+# 4. A short name for a deep path.
+move-away2_=700,600
+edit_=bar.editRequested(bookmarks.items.find(i => i.name === "Taxes 2026").id)
+editor=
+key-close3_=Escape
