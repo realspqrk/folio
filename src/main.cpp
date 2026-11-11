@@ -12,6 +12,7 @@
 #include <QUrl>
 #include <cstdio>
 
+#include "bookmarks.h"
 #include "filemanager1.h"
 #include "foldermodel.h"
 #include "places.h"
@@ -130,6 +131,9 @@ int main(int argc, char *argv[]) {
 
     Theme theme;
     Places places;
+    Bookmarks bookmarks;
+    // The bar notices a bookmark's folder coming or going when the sidebar does.
+    QObject::connect(&places, &Places::changed, &bookmarks, &Bookmarks::refresh);
     Thumbnails thumbnails;
     // Plugins' text follows the language too.
     Plugins plugins(translator.language());
@@ -148,6 +152,7 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty("theme", &theme);
     engine.rootContext()->setContextProperty("places", &places);
     engine.rootContext()->setContextProperty("plugins", &plugins);
+    engine.rootContext()->setContextProperty("bookmarks", &bookmarks);
 
     Windows windows(&engine, &plugins);
     if (!windows.open(start, select))

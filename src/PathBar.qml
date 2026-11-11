@@ -18,6 +18,11 @@ Rectangle {
     signal togglePreview()
     signal cycleView()
     signal editDone()
+    // The browser's star: whether this folder is bookmarked, and a click on
+    // it (Ctrl+B does the same), which hangs the bubble from it.
+    readonly property bool bookmarked: { bookmarks.items; return bookmarks.find(backend.path).length > 0 }
+    property alias star: starButton
+    signal bookmarkRequested(var anchor)
 
     function editPath() {
         pathField.text = backend.typedPath()
@@ -188,6 +193,19 @@ Rectangle {
         }
 
         Item { implicitWidth: 16 }
+        IconButton {
+            id: starButton
+            visible: !bar.editing && !bar.searching
+            text: bar.bookmarked ? qsTr("Edit bookmark") : qsTr("Bookmark this folder")
+            onClicked: bar.bookmarkRequested(starButton)
+            contentItem: Item {
+                BookmarkStar {
+                    anchors.centerIn: parent
+                    filled: bar.bookmarked
+                    color: bar.bookmarked ? theme.accent : theme.foreground
+                }
+            }
+        }
         // Shows the current view; clicking moves to the next one.
         IconButton {
             glyph: bar.viewMode

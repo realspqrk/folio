@@ -6,3 +6,7 @@ cmake -S "$ROOT" -B "$ROOT/build" -DCMAKE_BUILD_TYPE=Release >/dev/null
 cmake --build "$ROOT/build" --target folio_tests -j"$(nproc)"
 cd "$ROOT/build"
 QT_QPA_PLATFORM=offscreen ./folio_tests
+
+# The bookmarks bar's model tests.
+cmake --build "$ROOT/build" --target bookmarks_tests -j"$(nproc)"
+QT_QPA_PLATFORM=offscreen ./bookmarks_tests
